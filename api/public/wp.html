@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-Time Chat</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+
+        .chat-container {
+            display: flex;
+            border: 1px solid #ccc;
+            width: 80%;
+            max-width: 1000px;
+            height: 600px;
+            background-color: white;
+        }
+
+        .left-side {
+            width: 30%;
+            border-right: 1px solid #ccc;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .user-list ul {
+            list-style: none;
+            padding: 0;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        .user-list ul li {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .user-list ul li:hover {
+            background-color: #f1f1f1;
+        }
+
+        .logged-in-user {
+            font-size: 14px;
+            color: gray;
+        }
+
+        .logout-btn {
+            margin-top: 10px;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            background-color: #dc3545;
+            color: white;
+            border-radius: 4px;
+        }
+
+        .logout-btn:hover {
+            background-color: #b52a36;
+        }
+
+        .right-side {
+            width: 70%;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .chat-header {
+            margin-bottom: 20px;
+        }
+
+        .chat-box {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            max-height: 400px;
+        }
+
+        .input-area {
+            display: flex;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .input-area button {
+            padding: 10px 15px;
+            margin-left: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .input-area button:hover {
+            background-color: #0056b3;
+        }
+
+        .chat-box div {
+            margin-bottom: 10px;
+        }
+
+        .chat-box div:nth-child(even) {
+            background-color: #f1f1f1;
+            padding: 5px;
+            border-radius: 5px;
+        }
+
+        /* Right-side chat box layout */
+        .right-side {
+            width: 60%;
+            /* or any other width you prefer */
+            padding: 20px;
+            border-left: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Chat header styling */
+        .chat-header {
+            margin-bottom: 10px;
+        }
+
+        #chatWith {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        /* Chat content box */
+        .chat-box {
+            flex: 1;
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            overflow-y: auto;
+        }
+
+        /* Input area for sending messages */
+        .input-area {
+            display: flex;
+        }
+
+        #messageInput {
+            width: 80%;
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        #sendMessageBtn {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="chat-container">
+        <!-- Left Side: User list + self + logout -->
+        <div class="left-side">
+            <div class="user-list">
+                <ul id="userList"></ul>
+                <!-- show all user list -->
+            </div>
+            <div>
+                <div class="logged-in-user">
+                    <p><strong>Logged in as:</strong> <span id="loggedInUser"></span></p>
+                    <!-- shown login user list -->
+                </div>
+                <button class="logout-btn" onclick="handleLogout()">Logout</button>
+                <!-- logout functionality -->
+            </div>
+        </div>
+
+        <!-- Right Side: Chat -->
+        <div class="right-side">
+            <div class="chat-header">
+                <h2 id="chatWith">Select a user to chat</h2>
+            </div>
+
+            <div class="chat-box" id="chatBox">
+                <!-- Messages go here -->
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="messageInput" placeholder="Type your message..." />
+                <button id="sendMessageBtn">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <script>
+        const socket = io('http://localhost:5000');
+
+        const token = localStorage.getItem("token");
+        let loggedInUserId = null;
+        let loggedInUserName = null;
+
+        console.log('loggedInUserId: ', loggedInUserId);
+
+
+        //left side all contact names - except khush 
+        // Fetch users list
+        async function fetchUsers() {
+            try {
+                const res = await axios.get("http://localhost:5000/api/action/getUser", {
+                    params: {
+                        token: token,
+                    },
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                });
+                const data = res.data;
+
+                if (data.status && data.data) {
+                    const userList = document.getElementById("userList");
+                    userList.innerHTML = "";
+
+                    data.data.forEach(user => {
+                        const li = document.createElement("li");
+
+                        li.textContent = user.name;
+
+                        // Add click event listener to open chat box
+                        li.addEventListener('click', () => openChatBox(user));
+
+                        userList.appendChild(li);
+                    });
+                }
+            } catch (err) {
+                console.error("Error fetching users:", err);
+            }
+        }
+
+        //right side main box
+
+        //   open the chat box for a specific user on the right side
+
+        let currentReceiverId = null;
+        let currentReceiverName = null;
+
+        function openChatBox(user) {
+            currentReceiverId = user.id;
+            currentReceiverName = user.name;
+            // Update the chat header  
+            document.getElementById("chatWith").textContent = `Chat with ${user.name}`;
+
+            const chatBox = document.getElementById("chatBox");
+            chatBox.innerHTML = '';
+
+            //  input field and send button 
+
+            document.getElementById("messageInput").value = '';
+            document.getElementById("sendMessageBtn").onclick = () => sendMessage(user);
+
+
+            // Listen for incoming messages from the server
+
+        }
+        socket.on("message", (data) => {
+            const chatBox = document.getElementById("chatBox");
+
+            if (data.sender === currentReceiverId || data.receiverId === currentReceiverId) {
+                const messageDiv = document.createElement("div");
+                messageDiv.textContent = `${data.sender === loggedInUserId ? "you" : `${currentReceiverName}`}: ${data.message}`;
+                chatBox.appendChild(messageDiv);
+            }
+        });
+
+
+        // Function to send the message (for demo purposes)
+        function sendMessage(user) {
+            const message = messageInput.value;
+
+            if (message.trim() !== '') {
+                // Emit the message to the server
+                socket.emit('sendMessage', {
+                    senderId: loggedInUserId,
+                    receiverId: user.id,
+                    message: message
+                });
+
+                console.log(loggedInUserName)
+                // Optionally, display the message in the chat box immediately
+                const messageDiv = document.createElement('div');
+                messageDiv.textContent = `you: ${message}`;
+                chatBox.appendChild(messageDiv);
+
+                // Clear the input field
+                messageInput.value = '';
+            }
+        }
+
+        fetchUsers();
+
+
+        //socket whene they registered
+        socket.on("registered", (data) => {
+            alert(data.message);
+        });
+
+
+
+        //left bottom khush login name:
+        async function fetchLoginUser() {
+            try {
+                const res = await axios.get("http://localhost:5000/api/action/getLoginUser", {
+                    params: {
+                        token: token // Passing email as a query parameter
+                    },
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                });
+
+                const user = res.data.data;
+                console.log('user: ', user);
+                const userId = user.id;
+                const userName = user.name;
+                console.log('userId: ', userId);
+
+
+                if (user.status && user?.name) {
+                    loggedInUserId = userId;
+                    loggedInUserName = userName;
+                    socket.emit("register", user);
+                    document.getElementById("loggedInUser").textContent = user.name;
+                }
+                console.log('loggedInUserName: ', loggedInUserName);
+                console.log('loggedInUserId: ', loggedInUserId);
+            } catch (err) {
+                console.error("Error fetching logged-in user:", err.message);
+                document.getElementById("loggedInUser").textContent = "Error fetching user";
+            }
+        }
+
+        window.onload = function () {
+            fetchLoginUser();
+        };
+
+
+        function handleLogout() {
+            window.location.href = "/logout.html";
+        }
+
+
+
+
+        // let currentReceiverId = null;
+        // let currentReceiverName = null;
+
+        // function selectUser(id, name) {
+        //     currentReceiverId = id;
+        //     currentReceiverName = name;
+        //     document.getElementById("chatWith").textContent = `Chatting with: ${name}`;
+        //     document.getElementById("chatBox").innerHTML = ""; // clear old chat
+        //     // You can optionally fetch previous messages here
+        // }
+
+        // function displayMessage(sender, message, time = "just now") {
+        //     const chatBox = document.getElementById("chatBox");
+        //     const msg = document.createElement("div");
+        //     msg.innerHTML = `<strong>${sender}:</strong> ${message} (${time})`;
+        //     chatBox.appendChild(msg);
+        //     chatBox.scrollTop = chatBox.scrollHeight;
+        // }
+
+        // document.getElementById("sendMessageBtn").addEventListener("click", () => {
+        //     const msg = document.getElementById("messageInput").value.trim();
+        //     if (msg && currentReceiverId) {
+        //         socket.emit("send_message", {
+        //             senderId: userId,
+        //             receiverId: currentReceiverId,
+        //             content: msg,
+        //             timestamp: new Date().toLocaleTimeString()
+        //         });
+
+        //         displayMessage("You", msg);
+        //         document.getElementById("messageInput").value = "";
+        //     }
+        // });
+
+        // socket.on("private_message", (data) => {
+        //     if (data.senderId === currentReceiverId) {
+        //         displayMessage(data.senderName || data.senderId, data.content, data.timestamp);
+        //     }
+        // });
+
+        // socket.on("connect", () => {
+        //     console.log("Connected to server");
+        // });
+
+        // socket.on("disconnect", () => {
+        //     console.log("Disconnected");
+        // });
+    </script>
+</body>
+
+</html>
