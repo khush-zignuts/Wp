@@ -1,75 +1,82 @@
-const { Message } = require("../../models/Message");
-// const admin = require("firebase-admin");
+const { Message } = require("../../models/index");
+const { HTTP_STATUS_CODES } = require("../../config/constant");
+const { Op } = require("sequelize");
 
-const sendMessage = async (req, res) => {
+const saveMessage = async (req, res) => {
   try {
-    const { senderId, receiverId, content } = req.body;
+    const { chatId, senderId, receiverId, message } = req.body;
+    console.log("req.body: ", req.body);
 
-    // Validate required fields
-    if (!senderId || !receiverId || !content) {
-      return res.status(400).json({
-        status: false,
-        message: "Missing fields",
-        data: "",
-        error: "REQUIRED_FIELDS_MISSING",
-      });
-    }
-
-    // Store message in DB
-    const timestamp = Math.floor(Date.now() / 1000); // UNIX timestamp
-    const message = await Message.create({
+    // Save message to DB
+    const savedMessage = await Message.create({
+      chatId,
       senderId,
       receiverId,
-      content,
-      timestamp,
-      isRead: false,
-      isDelivered: false, // Message is initially not delivered
-      deletedFor: [], // Initially, no one has deleted the message
-      isDeletedForEveryone: false, // Message is not deleted for everyone
+      content: message,
     });
 
-    // Emit message using Socket.IO (if socket is available)
-    req.io.to(receiverId).emit("private_message", {
-      senderId,
-      content,
-      timestamp,
-    });
-
-    // Send push notification using FCM (optional)
-    // Uncomment and use if FCM integration is needed
-    /*
-      const payload = {
-        notification: {
-          title: `New message from ${senderId}`,
-          body: content,
-        },
-        data: {
-          senderId: senderId.toString(),
-          content,
-        },
-        token: req.body.receiverFcmToken, // Ensure the receiverFcmToken is sent in the request body
-      };
-  
-      if (req.body.receiverFcmToken) {
-        await admin.messaging().send(payload);
-      }
-      */
-
-    return res.status(200).json({
-      status: true,
-      message: "Message sent successfully",
-      data: message,
+    return res.status(201).json({
+      status: HTTP_STATUS_CODES.CREATED,
+      message: "Message sent successfully.",
+      data: savedMessage,
       error: "",
     });
   } catch (error) {
+    console.error("Error saving message:", error);
     return res.status(500).json({
-      status: false,
-      message: "Server error",
+      status: HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR,
+      message: "Failed to send message.",
       data: "",
       error: error.message,
     });
   }
 };
+
+const getMessages = async (req, res) => {
+  try {
+    const chatId = req.params.chatId;
+    const limit = parseInt(req.query.limit) || 20;
+    const before = req.query.before ? new Date(req.query.before) : new Date();
+
+    const messages = await Message.findAll({
+      where: {
+        chatId,
+        createdAt: { [Op.lt]: before },
+      },
+      order: [["createdAt", "DESC"]],
+      limit,
+    });
+
+    res.status(200).json({ status: true, data: messages });
+  } catch (err) {
+    console.error("Error fetching messages:", err);
+    res.status(500).json({ status: false, error: "Server Error" });
+  }
+};
+
+// const getMessagesByChatId = async (req, res) => {
+//   try {
+//     const { chatId } = req.params;
+
+//     const messages = await Message.findAll({
+//       where: { chatId },
+//       order: [["createdAt", "ASC"]], // oldest to newest
+//     });
+
+//     return res.status(200).json({
+//       status: 200,
+//       message: "Messages fetched successfully.",
+//       data: messages,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching messages:", error);
+//     return res.status(500).json({
+//       status: 500,
+//       message: "Failed to fetch messages.",
+//       error: error.message,
+//     });
+//   }
+// };
 
 const deleteMessage = async (req, res) => {
   try {
@@ -125,6 +132,7 @@ const deleteMessage = async (req, res) => {
 };
 
 module.exports = {
-  sendMessage,
+  saveMessage,
+  getMessages,
   deleteMessage,
 };

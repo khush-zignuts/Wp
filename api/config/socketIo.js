@@ -34,6 +34,12 @@ const socketSetup = (server) => {
       const { senderId, receiverId, message } = data;
       console.log("data: ", data);
 
+      const messagePayload = {
+        senderId,
+        receiverId,
+        message,
+        timestamp: new Date().toISOString(),
+      };
       // Emit the message to the specific receiver
       if (users[receiverId]) {
         io.to(users[receiverId]).emit("message", {
@@ -41,6 +47,14 @@ const socketSetup = (server) => {
           receiverId: receiverId,
           message: message,
         });
+      }
+
+      if (users[senderId]) {
+        io.to(users[senderId]).emit("message", messagePayload);
+      }
+
+      if (users[receiverId]) {
+        io.to(users[receiverId]).emit("message", messagePayload);
       }
     });
 

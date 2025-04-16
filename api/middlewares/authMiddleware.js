@@ -58,7 +58,7 @@ const checkUser = async (req, res, next) => {
     return res.json({
       status: HTTP_STATUS_CODES.UNAUTHORIZED,
       message: "unauthorized",
-      data: null,
+      data: "",
       error: error.message,
     });
   }

@@ -47,6 +47,16 @@
             max-height: 400px;
         }
 
+        .user-list h1 {
+            font-size: 20px;
+            margin-bottom: 15px;
+            color: #333;
+            text-align: center;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+            font-weight: bold;
+        }
+
         .user-list ul li {
             padding: 10px;
             cursor: pointer;
@@ -189,6 +199,7 @@
         <!-- Left Side: User list + self + logout -->
         <div class="left-side">
             <div class="user-list">
+                <h1>Your Contact List:</h1>
                 <ul id="userList"></ul>
                 <!-- show all user list -->
             </div>
@@ -228,19 +239,53 @@
         let loggedInUserId = null;
         let loggedInUserName = null;
 
-        console.log('loggedInUserId: ', loggedInUserId);
+        //socket whene they registered
+        socket.on("registered", (data) => {
+            alert(data.message);
+        });
 
+        //left bottom khush login name:
+        async function fetchLoginUser() {
+            try {
+                const res = await axios.get("http://localhost:5000/api/action/getLoginUser", {
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
+                    }
+                });
+
+                const user = res.data.data;
+                const userId = user.id;
+                const userName = user.name;
+
+
+                if (user.status && user?.name) {
+                    loggedInUserId = userId;
+                    loggedInUserName = userName;
+                    socket.emit("register", user);
+                    document.getElementById("loggedInUser").textContent = user.name;
+                }
+                console.log('loggedInUserName: ', loggedInUserName);
+                console.log('loggedInUserId: ', loggedInUserId);
+            } catch (err) {
+                console.error("Error fetching logged-in user:", err.message);
+                document.getElementById("loggedInUser").textContent = "Error fetching user";
+            }
+        }
+
+        function handleLogout() {
+            window.location.href = "/logout.html";
+        }
 
         //left side all contact names - except khush 
         // Fetch users list
         async function fetchUsers() {
             try {
                 const res = await axios.get("http://localhost:5000/api/action/getUser", {
-                    params: {
-                        token: token,
-                    },
+
                     headers: {
                         "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
                     },
                 });
                 const data = res.data;
@@ -271,25 +316,72 @@
 
         let currentReceiverId = null;
         let currentReceiverName = null;
+        let currentSenderChatId = null;
+        let currentReceiverChatId = null;
+        let chatId = null;
 
-        function openChatBox(user) {
+        async function openChatBox(user) {
             currentReceiverId = user.id;
             currentReceiverName = user.name;
+
+            try {
+                const [senderResponse, receiverResponse] = await Promise.all([
+                    fetch("http://localhost:5000/api/chat/get-or-create", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            user1Id: loggedInUserId,
+                            user2Id: currentReceiverId,
+                        }),
+                    }),
+                    fetch("http://localhost:5000/api/chat/get-or-create", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            user1Id: currentReceiverId,
+                            user2Id: loggedInUserId,
+                        }),
+                    })
+                ]);
+
+                const senderChat = await senderResponse.json();
+                const receiverChat = await receiverResponse.json();
+
+                currentSenderChatId = senderChat.data.id;
+                currentReceiverChatId = receiverChat.data.id;
+
+                const chatId = {
+                    currentSenderChatId,
+                    currentReceiverChatId
+                }
+
+
+            } catch (error) {
+                console.error("Failed to get or create chat:", error);
+                alert("Unable to start chat with user.");
+                return;
+            }
+
             // Update the chat header  
             document.getElementById("chatWith").textContent = `Chat with ${user.name}`;
 
             const chatBox = document.getElementById("chatBox");
             chatBox.innerHTML = '';
 
-            //  input field and send button 
-
+            // input field and send button 
             document.getElementById("messageInput").value = '';
             document.getElementById("sendMessageBtn").onclick = () => sendMessage(user);
 
-
-            // Listen for incoming messages from the server
-
+            await loadMessages(chatId);
+            document.getElementById("chatBox").scrollTop = document.getElementById("chatBox").scrollHeight;
         }
+
         socket.on("message", (data) => {
             const chatBox = document.getElementById("chatBox");
 
@@ -302,130 +394,112 @@
 
 
         // Function to send the message (for demo purposes)
-        function sendMessage(user) {
+        async function sendMessage(user) {
             const message = messageInput.value;
 
             if (message.trim() !== '') {
                 // Emit the message to the server
-                socket.emit('sendMessage', {
-                    senderId: loggedInUserId,
-                    receiverId: user.id,
-                    message: message
-                });
 
-                console.log(loggedInUserName)
+
+                const isSender = loggedInUserId === user.id;
+
+                const chatIdToUse = isSender ? currentReceiverChatId : currentSenderChatId;
+
+                const messagePayload = {
+                    chatId: chatIdToUse,
+                    senderId: loggedInUserId,
+                    receiverId: currentReceiverId,
+                    message: message
+                };
+
+                socket.emit('sendMessage', messagePayload);
+
+
+                try {
+                    const response = await fetch("http://localhost:5000/api/message/send", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem("token") || ""}` // if using JWT
+                        },
+                        body: JSON.stringify(messagePayload)
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        console.error("API error:", data.message || data.error);
+                    }
+                } catch (error) {
+                    console.error("Failed to send message to server:", error);
+                }
+
                 // Optionally, display the message in the chat box immediately
-                const messageDiv = document.createElement('div');
-                messageDiv.textContent = `you: ${message}`;
-                chatBox.appendChild(messageDiv);
+                // const messageDiv = document.createElement('div');
+                // messageDiv.textContent = `you: ${message}`;
+                // chatBox.appendChild(messageDiv);
 
                 // Clear the input field
                 messageInput.value = '';
             }
         }
 
-        fetchUsers();
+        let earliestMessageTime = null;
+
+        async function loadMessages(chatId, beforeTime = null) {
+
+            console.log('chatId: ', chatId);
 
 
-        //socket whene they registered
-        socket.on("registered", (data) => {
-            alert(data.message);
-        });
+            const url = new URL(`http://localhost:5000/api/message/${chatId}`);
+            if (beforeTime) url.searchParams.append("before", beforeTime);
+            url.searchParams.append("limit", 20);
 
-
-
-        //left bottom khush login name:
-        async function fetchLoginUser() {
             try {
-                const res = await axios.get("http://localhost:5000/api/action/getLoginUser", {
-                    params: {
-                        token: token // Passing email as a query parameter
-                    },
+                const response = await fetch(url, {
                     headers: {
-                        "Content-Type": "application/json"
+                        'Authorization': `Bearer ${token}`
                     }
                 });
 
-                const user = res.data.data;
-                console.log('user: ', user);
-                const userId = user.id;
-                const userName = user.name;
-                console.log('userId: ', userId);
+                const result = await response.json();
+                if (result.status && result.data.length) {
+                    const messages = result.data
+                    const chatBox = document.getElementById("chatBox");
 
+                    const previousScrollHeight = chatBox.scrollHeight;
 
-                if (user.status && user?.name) {
-                    loggedInUserId = userId;
-                    loggedInUserName = userName;
-                    socket.emit("register", user);
-                    document.getElementById("loggedInUser").textContent = user.name;
+                    messages.forEach((msg) => {
+                        const div = document.createElement("div");
+                        div.textContent = `${msg.senderId === loggedInUserId ? "you" : currentReceiverName}: ${msg.content}`;
+                        chatBox.prepend(div);
+                    });
+
+                    earliestMessageTime = messages[0].createdAt;
+
+                    // maintain scroll position after prepending
+                    chatBox.scrollTop = chatBox.scrollHeight - previousScrollHeight;
                 }
-                console.log('loggedInUserName: ', loggedInUserName);
-                console.log('loggedInUserId: ', loggedInUserId);
             } catch (err) {
-                console.error("Error fetching logged-in user:", err.message);
-                document.getElementById("loggedInUser").textContent = "Error fetching user";
+                console.error("Error loading messages:", err);
             }
         }
 
+
         window.onload = function () {
             fetchLoginUser();
+            fetchUsers();
         };
 
+        document.getElementById("chatBox").addEventListener("scroll", () => {
+            const chatBox = document.getElementById("chatBox");
 
-        function handleLogout() {
-            window.location.href = "/logout.html";
-        }
+            if (chatBox.scrollTop === 0 && earliestMessageTime && currentSenderChatId) {
+                loadMessages(currentSenderChatId, earliestMessageTime);
+            }
+        });
 
 
-
-
-        // let currentReceiverId = null;
-        // let currentReceiverName = null;
-
-        // function selectUser(id, name) {
-        //     currentReceiverId = id;
-        //     currentReceiverName = name;
-        //     document.getElementById("chatWith").textContent = `Chatting with: ${name}`;
-        //     document.getElementById("chatBox").innerHTML = ""; // clear old chat
-        //     // You can optionally fetch previous messages here
-        // }
-
-        // function displayMessage(sender, message, time = "just now") {
-        //     const chatBox = document.getElementById("chatBox");
-        //     const msg = document.createElement("div");
-        //     msg.innerHTML = `<strong>${sender}:</strong> ${message} (${time})`;
-        //     chatBox.appendChild(msg);
-        //     chatBox.scrollTop = chatBox.scrollHeight;
-        // }
-
-        // document.getElementById("sendMessageBtn").addEventListener("click", () => {
-        //     const msg = document.getElementById("messageInput").value.trim();
-        //     if (msg && currentReceiverId) {
-        //         socket.emit("send_message", {
-        //             senderId: userId,
-        //             receiverId: currentReceiverId,
-        //             content: msg,
-        //             timestamp: new Date().toLocaleTimeString()
-        //         });
-
-        //         displayMessage("You", msg);
-        //         document.getElementById("messageInput").value = "";
-        //     }
-        // });
-
-        // socket.on("private_message", (data) => {
-        //     if (data.senderId === currentReceiverId) {
-        //         displayMessage(data.senderName || data.senderId, data.content, data.timestamp);
-        //     }
-        // });
-
-        // socket.on("connect", () => {
-        //     console.log("Connected to server");
-        // });
-
-        // socket.on("disconnect", () => {
-        //     console.log("Disconnected");
-        // });
     </script>
 </body>
 

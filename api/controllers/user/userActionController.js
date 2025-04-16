@@ -6,19 +6,11 @@ const { Op } = require("sequelize");
 
 const getUser = async (req, res) => {
   try {
-    const { token } = req.query;
-
-    if (!token) {
-      return res.status(400).json({
-        status: false,
-        message: "token parameter is missing.",
-      });
-    }
-
+    const userId = req.user.dataValues.id;
     // Fetch the current user based on the provided token
     const user = await User.findOne({
       where: {
-        accessToken: token,
+        id: userId,
       },
       attributes: ["id"],
     });
@@ -35,7 +27,7 @@ const getUser = async (req, res) => {
     const users = await User.findAll({
       where: {
         id: {
-          [Sequelize.Op.ne]: user.id,
+          [Sequelize.Op.ne]: req.user.id,
         },
       },
       attributes: ["id", "name", "email", "isOnline"],
@@ -49,13 +41,13 @@ const getUser = async (req, res) => {
       });
     } else {
       return res.status(404).json({
-        status: false,
+        status: 404,
         message: "No users found.",
       });
     }
   } catch (error) {
     return res.status(500).json({
-      status: false,
+      status: 500,
       message: "Server error",
       data: "",
       error: error.message,
@@ -65,20 +57,13 @@ const getUser = async (req, res) => {
 
 const getLoginUser = async (req, res) => {
   try {
-    const { token } = req.query;
-
-    if (!token) {
-      return res.status(400).json({
-        status: false,
-        message: "token parameter is missing.",
-      });
-    }
+    const userid = req.user.dataValues.id;
 
     const user = await User.findOne({
       where: {
-        accessToken: token,
+        id: userid,
       },
-      attributes: ["id", "name", "status"], // Only fetch name and status
+      attributes: ["id", "name", "status"],
     });
 
     if (user) {

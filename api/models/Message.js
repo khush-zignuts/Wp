@@ -16,7 +16,7 @@ const Message = sequelize.define(
       allowNull: false,
       field: "chat_id",
       references: {
-        model: "one_to_one_chats",
+        model: "chats",
         key: "id",
       },
     },
@@ -38,6 +38,11 @@ const Message = sequelize.define(
         key: "id",
       },
     },
+    content: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+
     isRead: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
@@ -76,6 +81,19 @@ const Message = sequelize.define(
     tableName: "messages",
     freezeTableName: true,
     timestamps: true,
+
+    //for fast retrival:
+    indexes: [
+      {
+        fields: ["chat_id"],
+      },
+      {
+        fields: ["sender_id"],
+      },
+      {
+        fields: ["receiver_id"],
+      },
+    ],
   }
 );
 
