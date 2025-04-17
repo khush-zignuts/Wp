@@ -19,8 +19,10 @@ const socketSetup = (server) => {
     socket.on("register", (user) => {
       console.log(`${user.name} has connected with socket ID ${socket.id}`);
 
+      const userId = user.id;
+
       // Store the mapping: userName -> socket.id
-      users[user.id] = socket.id;
+      users[userId] = socket.id;
 
       // Send confirmation back to the frontend
       socket.emit("registered", {
@@ -31,30 +33,34 @@ const socketSetup = (server) => {
 
     // Handle incoming message event
     socket.on("sendMessage", (data) => {
-      const { senderId, receiverId, message } = data;
+      const { chatId, senderId, receiverId, message } = data;
       console.log("data: ", data);
 
       const messagePayload = {
+        chatId,
         senderId,
         receiverId,
         message,
-        timestamp: new Date().toISOString(),
+        // timestamp: new Date().toISOString(),
       };
+
+      // users[receiverId] = socket.id;
       // Emit the message to the specific receiver
+      // if (users[receiverId]) {
+      //   io.to(users[receiverId]).emit("message", {
+      //     chatId: chatId,
+      //     sender: senderId,
+      //     receiverId: receiverId,
+      //     message: message,
+      //   });
+      // }
+
       if (users[receiverId]) {
-        io.to(users[receiverId]).emit("message", {
-          sender: senderId,
-          receiverId: receiverId,
-          message: message,
-        });
+        io.to(users[receiverId]).emit("message", messagePayload);
       }
 
       if (users[senderId]) {
         io.to(users[senderId]).emit("message", messagePayload);
-      }
-
-      if (users[receiverId]) {
-        io.to(users[receiverId]).emit("message", messagePayload);
       }
     });
 
@@ -62,12 +68,12 @@ const socketSetup = (server) => {
     socket.on("disconnect", () => {
       console.log("A user disconnected:", socket.id);
       // Clean up user from user list on disconnect
-      for (const userId in users) {
-        if (users[userId] === socket.id) {
-          delete users[userId];
-          break;
-        }
-      }
+      // for (const userId in users) {
+      //   if (users[userId] === socket.id) {
+      //     delete users[userId];
+      //     break;
+      //   }
+      // }
     });
   });
 };

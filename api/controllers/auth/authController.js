@@ -47,10 +47,9 @@ module.exports = {
         attributes: ["id"],
       });
 
-
       if (existingUser) {
         return res.status(HTTP_STATUS_CODES.BAD_REQUEST).json({
-          status: false,
+          status: HTTP_STATUS_CODES.BAD_REQUEST,
           message: "User already exists.",
           data: "",
           error: "EMAIL_ALREADY_REGISTERED",
@@ -59,14 +58,10 @@ module.exports = {
 
       const hashedPassword = await bcrypt.hash(password, 10);
 
-
-
       const otp = otpGenerator.generate(6, {
         upperCase: false,
         specialChars: false,
       });
-
-    
 
       const otpCreated = Math.floor(Date.now() / 1000);
 
@@ -84,18 +79,16 @@ module.exports = {
 
       const html = `<h2>Your OTP is: ${otp}</h2><p>It is valid for 5 minutes.</p>`;
 
-
       await sendEmail(email, "Your OTP for Signup", html);
-
       return res.status(HTTP_STATUS_CODES.OK).json({
-        status: true,
+        status: HTTP_STATUS_CODES.OK,
         message: "Signup successful. Please verify your email using OTP.",
-        data: { email }, // you can include more info if needed
+        data: { email },
         error: null,
       });
     } catch (err) {
       return res.status(HTTP_STATUS_CODES.SERVER_ERROR).json({
-        status: false,
+        status: HTTP_STATUS_CODES.SERVER_ERROR,
         message: "Server error",
         data: "",
         error: err.message,
@@ -126,35 +119,34 @@ module.exports = {
         attributes: ["id", "otp", "otpCreatedAt"],
       });
 
-      if (!user)
+      if (!user) {
         return res.status(HTTP_STATUS_CODES.NOT_FOUND).json({
-          status: false,
+          status: HTTP_STATUS_CODES.NOT_FOUND,
           message: "User not found.",
-          data: null,
+          data: "",
           error: "USER_NOT_FOUND",
         });
+      }
 
       const isValid = verifyOTP(otp, user.otp, user.otpCreatedAt);
-
-      if (!isValid)
+      if (!isValid) {
         return res.status(HTTP_STATUS_CODES.BAD_REQUEST).json({
-          status: false,
+          status: HTTP_STATUS_CODES.BAD_REQUEST,
           message: "Invalid OTP.",
           data: "",
           error: "INVALID_OTP",
         });
-
-    
+      }
 
       return res.status(HTTP_STATUS_CODES.OK).json({
-        status: true,
+        status: HTTP_STATUS_CODES.OK,
         message: "Email verified successfully!",
         data: "",
-        error: "",
+        error: null,
       });
     } catch (err) {
       return res.status(HTTP_STATUS_CODES.SERVER_ERROR).json({
-        status: false,
+        status: HTTP_STATUS_CODES.SERVER_ERROR,
         message: "Server error",
         data: "",
         error: err.message,
@@ -165,7 +157,7 @@ module.exports = {
   login: async (req, res) => {
     try {
       const { email, password } = req.body;
-  
+
       const validation = new VALIDATOR(req.body, {
         email: VALIDATION_RULES.USER.EMAIL,
         password: VALIDATION_RULES.USER.PASSWORD,
@@ -191,7 +183,6 @@ module.exports = {
           "isOnline",
         ],
       });
-
 
       if (!user) {
         return res.status(HTTP_STATUS_CODES.UNAUTHORIZED).json({
@@ -240,7 +231,7 @@ module.exports = {
 
   logout: async (req, res) => {
     try {
-      const { userId } = req.params
+      const { userId } = req.params;
 
       const user = await User.findOne({
         where: { id: userId, isDeleted: false },

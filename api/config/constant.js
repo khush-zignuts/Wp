@@ -18,4 +18,5 @@ module.exports = {
   TOKEN_EXPIRY: {
     ACCESS_TOKEN: "5d",
   },
+  generateUUID: () => uuidv4(),
 };

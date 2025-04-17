@@ -15,7 +15,7 @@ const saveMessage = async (req, res) => {
       content: message,
     });
 
-    return res.status(201).json({
+    return res.status(HTTP_STATUS_CODES.CREATED).json({
       status: HTTP_STATUS_CODES.CREATED,
       message: "Message sent successfully.",
       data: savedMessage,
@@ -23,11 +23,11 @@ const saveMessage = async (req, res) => {
     });
   } catch (error) {
     console.error("Error saving message:", error);
-    return res.status(500).json({
-      status: HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR,
+    return res.status(HTTP_STATUS_CODES.SERVER_ERROR).json({
+      status: HTTP_STATUS_CODES.SERVER_ERROR,
       message: "Failed to send message.",
       data: "",
-      error: error.message,
+      error: error.message || "Internal server error",
     });
   }
 };
@@ -35,6 +35,10 @@ const saveMessage = async (req, res) => {
 const getMessages = async (req, res) => {
   try {
     const chatId = req.params.chatId;
+    console.log("chatId: ", chatId);
+    const senderId = req.user.id;
+    console.log("senderId: ", senderId);
+
     const limit = parseInt(req.query.limit) || 20;
     const before = req.query.before ? new Date(req.query.before) : new Date();
 
@@ -47,10 +51,20 @@ const getMessages = async (req, res) => {
       limit,
     });
 
-    res.status(200).json({ status: true, data: messages });
+    return res.status(HTTP_STATUS_CODES.OK).json({
+      status: HTTP_STATUS_CODES.OK,
+      message: "Messages fetched successfully.",
+      data: messages,
+      error: "",
+    });
   } catch (err) {
     console.error("Error fetching messages:", err);
-    res.status(500).json({ status: false, error: "Server Error" });
+    return res.status(HTTP_STATUS_CODES.SERVER_ERROR).json({
+      status: HTTP_STATUS_CODES.SERVER_ERROR,
+      message: "Failed to fetch messages.",
+      data: "",
+      error: err.message || "Internal server error",
+    });
   }
 };
 
@@ -78,61 +92,61 @@ const getMessages = async (req, res) => {
 //   }
 // };
 
-const deleteMessage = async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    const { userId, deleteForEveryone } = req.body;
+// const deleteMessage = async (req, res) => {
+//   try {
+//     const { messageId } = req.params;
+//     const { userId, deleteForEveryone } = req.body;
 
-    const message = await Message.findByPk(messageId);
+//     const message = await Message.findByPk(messageId);
 
-    if (!message) {
-      return res.status(404).json({
-        status: false,
-        message: "Message not found",
-        error: "MESSAGE_NOT_FOUND",
-      });
-    }
+//     if (!message) {
+//       return res.status(404).json({
+//         status: false,
+//         message: "Message not found",
+//         error: "MESSAGE_NOT_FOUND",
+//       });
+//     }
 
-    if (deleteForEveryone) {
-      // Only sender can delete for everyone
-      if (message.senderId !== userId) {
-        return res.status(403).json({
-          status: false,
-          message: "Unauthorized",
-          error: "ONLY_SENDER_CAN_DELETE_FOR_EVERYONE",
-        });
-      }
+//     if (deleteForEveryone) {
+//       // Only sender can delete for everyone
+//       if (message.senderId !== userId) {
+//         return res.status(403).json({
+//           status: false,
+//           message: "Unauthorized",
+//           error: "ONLY_SENDER_CAN_DELETE_FOR_EVERYONE",
+//         });
+//       }
 
-      message.isDeletedForEveryone = true;
-      await message.save();
+//       message.isDeletedForEveryone = true;
+//       await message.save();
 
-      return res.status(200).json({
-        status: true,
-        message: "Message deleted for everyone",
-      });
-    } else {
-      if (!message.deletedFor.includes(userId)) {
-        message.deletedFor.push(userId);
-        await message.save();
-      }
+//       return res.status(200).json({
+//         status: true,
+//         message: "Message deleted for everyone",
+//       });
+//     } else {
+//       if (!message.deletedFor.includes(userId)) {
+//         message.deletedFor.push(userId);
+//         await message.save();
+//       }
 
-      return res.status(200).json({
-        status: true,
-        message: "Message deleted for you",
-      });
-    }
-  } catch (error) {
-    console.error("deleteMessage error:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Server error",
-      error: error.message,
-    });
-  }
-};
+//       return res.status(200).json({
+//         status: true,
+//         message: "Message deleted for you",
+//       });
+//     }
+//   } catch (error) {
+//     console.error("deleteMessage error:", error);
+//     return res.status(500).json({
+//       status: false,
+//       message: "Server error",
+//       error: error.message,
+//     });
+//   }
+// };
 
 module.exports = {
   saveMessage,
   getMessages,
-  deleteMessage,
+  // deleteMessage,
 };

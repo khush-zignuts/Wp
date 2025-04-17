@@ -1,8 +1,6 @@
 require("dotenv").config();
 const nodemailer = require("nodemailer");
 
-console.log("first");
-
 // Looking to send emails in production? Check out our Email API/SMTP product!
 // Looking to send emails in production? Check out our Email API/SMTP product!
 var transport = nodemailer.createTransport({

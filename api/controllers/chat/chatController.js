@@ -1,5 +1,6 @@
 const { Op } = require("sequelize");
 const { Chat } = require("../../models/index");
+const { HTTP_STATUS_CODES } = require("../../config/constant");
 
 // POST /api/chats/get-or-create
 const getorcreate = async (req, res) => {
@@ -22,15 +23,15 @@ const getorcreate = async (req, res) => {
         createdBy: user1Id,
       });
 
-      return res.status(201).json({
-        status: 201,
+      return res.status(HTTP_STATUS_CODES.CREATED).json({
+        status: HTTP_STATUS_CODES.CREATED,
         message: "Chat created successfully.",
         data: chat,
         error: "",
       });
     } else {
-      return res.status(200).json({
-        status: 200,
+      return res.status(HTTP_STATUS_CODES.OK).json({
+        status: HTTP_STATUS_CODES.OK,
         message: "Chat fetched successfully.",
         data: chat,
         error: "",
@@ -38,8 +39,8 @@ const getorcreate = async (req, res) => {
     }
   } catch (error) {
     console.error("Chat get-or-create error:", error);
-    return res.status(500).json({
-      status: 500,
+    return res.status(HTTP_STATUS_CODES.SERVER_ERROR).json({
+      status: HTTP_STATUS_CODES.SERVER_ERROR,
       message: "Failed to get or create chat",
       data: "",
       error: error.message || "Internal server error",

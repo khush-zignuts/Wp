@@ -236,6 +236,7 @@
         const socket = io('http://localhost:5000');
 
         const token = localStorage.getItem("token");
+
         let loggedInUserId = null;
         let loggedInUserName = null;
 
@@ -257,7 +258,6 @@
                 const user = res.data.data;
                 const userId = user.id;
                 const userName = user.name;
-
 
                 if (user.status && user?.name) {
                     loggedInUserId = userId;
@@ -326,7 +326,7 @@
 
             try {
                 const [senderResponse, receiverResponse] = await Promise.all([
-                    fetch("http://localhost:5000/api/chat/get-or-create", {
+                    fetch("http://localhost:5000/api/chat/getOrCreateChatId", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -337,7 +337,7 @@
                             user2Id: currentReceiverId,
                         }),
                     }),
-                    fetch("http://localhost:5000/api/chat/get-or-create", {
+                    fetch("http://localhost:5000/api/chat/getOrCreateChatId", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -350,18 +350,17 @@
                     })
                 ]);
 
+
                 const senderChat = await senderResponse.json();
                 const receiverChat = await receiverResponse.json();
 
                 currentSenderChatId = senderChat.data.id;
                 currentReceiverChatId = receiverChat.data.id;
 
-                const chatId = {
-                    currentSenderChatId,
-                    currentReceiverChatId
-                }
-
-
+                // const chatId = {
+                //     currentSenderChatId,
+                //     currentReceiverChatId
+                // }
             } catch (error) {
                 console.error("Failed to get or create chat:", error);
                 alert("Unable to start chat with user.");
@@ -378,16 +377,19 @@
             document.getElementById("messageInput").value = '';
             document.getElementById("sendMessageBtn").onclick = () => sendMessage(user);
 
-            await loadMessages(chatId);
+            await loadMessages(currentSenderChatId);
             document.getElementById("chatBox").scrollTop = document.getElementById("chatBox").scrollHeight;
         }
 
         socket.on("message", (data) => {
+            console.log('data: ', data);
             const chatBox = document.getElementById("chatBox");
 
-            if (data.sender === currentReceiverId || data.receiverId === currentReceiverId) {
+            if (data.senderId === loggedInUserId && data.receiverId === currentReceiverId
+                || data.senderId === currentReceiverId && data.receiverId === loggedInUserId
+            ) {
                 const messageDiv = document.createElement("div");
-                messageDiv.textContent = `${data.sender === loggedInUserId ? "you" : `${currentReceiverName}`}: ${data.message}`;
+                messageDiv.textContent = `${data.senderId === loggedInUserId ? "you" : `${currentReceiverName}`}: ${data.message}`;
                 chatBox.appendChild(messageDiv);
             }
         });
@@ -401,12 +403,12 @@
                 // Emit the message to the server
 
 
-                const isSender = loggedInUserId === user.id;
+                // const isSender = loggedInUserId === user.id;
 
-                const chatIdToUse = isSender ? currentReceiverChatId : currentSenderChatId;
+                // const chatIdToUse = isSender ? currentReceiverChatId : currentSenderChatId;
 
                 const messagePayload = {
-                    chatId: chatIdToUse,
+                    chatId: currentSenderChatId,
                     senderId: loggedInUserId,
                     receiverId: currentReceiverId,
                     message: message
@@ -446,25 +448,28 @@
 
         let earliestMessageTime = null;
 
-        async function loadMessages(chatId, beforeTime = null) {
-
-            console.log('chatId: ', chatId);
-
-
-            const url = new URL(`http://localhost:5000/api/message/${chatId}`);
-            if (beforeTime) url.searchParams.append("before", beforeTime);
-            url.searchParams.append("limit", 20);
-
+        async function loadMessages(currentSenderChatId, beforeTime = null) {
             try {
-                const response = await fetch(url, {
+                const params = {
+                    limit: 20,
+                };
+
+                // if (beforeTime) {
+                //     params.before = beforeTime;
+                // }
+
+                const response = await axios.get(`http://localhost:5000/api/message/get/${currentSenderChatId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
-                    }
+                    },
+                    params: params
                 });
 
-                const result = await response.json();
+                const result = response.data;
+                console.log('result: ', result);
+
                 if (result.status && result.data.length) {
-                    const messages = result.data
+                    const messages = result.data;
                     const chatBox = document.getElementById("chatBox");
 
                     const previousScrollHeight = chatBox.scrollHeight;
@@ -480,6 +485,7 @@
                     // maintain scroll position after prepending
                     chatBox.scrollTop = chatBox.scrollHeight - previousScrollHeight;
                 }
+
             } catch (err) {
                 console.error("Error loading messages:", err);
             }
